@@ -11,6 +11,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://unpkg.com/docx@8.5.0/build/index.umd.js"></script>
     <style>
         :root {
             --bg: #0A0A0A;
@@ -1300,6 +1302,86 @@
             }
         }
 
+        .choice-modal {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 260;
+            padding: 20px;
+        }
+
+        .choice-modal.show {
+            display: flex;
+        }
+
+        .choice-card {
+            width: 100%;
+            max-width: 380px;
+            background: var(--card);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 18px;
+            box-shadow: 0 20px 45px rgba(0, 0, 0, 0.45);
+        }
+
+        .choice-title {
+            font-family: 'Poppins', sans-serif;
+            font-size: 18px;
+            font-weight: 700;
+            margin-bottom: 6px;
+        }
+
+        .choice-sub {
+            font-size: 13px;
+            color: var(--muted);
+            margin-bottom: 14px;
+        }
+
+        .choice-options {
+            display: grid;
+            gap: 8px;
+            margin-bottom: 12px;
+        }
+
+        .choice-option {
+            border: 1px solid var(--border);
+            background: #101010;
+            color: var(--text);
+            border-radius: 10px;
+            padding: 10px 12px;
+            text-align: left;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all .15s;
+        }
+
+        .choice-option:hover {
+            border-color: var(--orange);
+            background: var(--orange-dim);
+            color: var(--orange);
+        }
+
+        .choice-cancel {
+            width: 100%;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            background: transparent;
+            color: var(--muted);
+            padding: 9px 11px;
+            cursor: pointer;
+            font-weight: 600;
+            transition: all .15s;
+        }
+
+        .choice-cancel:hover {
+            color: var(--text);
+            border-color: #3a3a3a;
+            background: #171717;
+        }
+
         /* RECENT ACTIVITY */
         .activity-list {
             display: flex;
@@ -1432,6 +1514,16 @@
         .sidebar.collapsed .nav-badge,
         .sidebar.collapsed .pomodoro-widget {
             display: none;
+        }
+
+        .sidebar.collapsed .sidebar-nav {
+            display: none;
+        }
+
+        .sidebar.collapsed .sidebar-logo {
+            justify-content: center;
+            padding: 18px 0;
+            border-bottom: none;
         }
 
         .sidebar.collapsed .nav-item {
@@ -1927,6 +2019,14 @@
 
     <!-- TOAST CONTAINER -->
     <div id="toast-container"></div>
+    <div class="choice-modal" id="choice-modal" onclick="closeChoiceModal(event)">
+        <div class="choice-card">
+            <div class="choice-title" id="choice-title">Select Option</div>
+            <div class="choice-sub" id="choice-sub">Choose one option below.</div>
+            <div class="choice-options" id="choice-options"></div>
+            <button class="choice-cancel" onclick="closeChoiceModalDirect()">Cancel</button>
+        </div>
+    </div>
     <div id="ai-chat-widget" style="position:fixed;right:16px;bottom:16px;z-index:1999;width:min(360px,calc(100vw - 24px));display:none;">
         <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
             <button onclick="toggleAiChat()" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card2);border:none;color:var(--text);cursor:pointer;">
@@ -2589,10 +2689,28 @@
         // ─── EXPORT / IMPORT ─────────────────────────────────────────────────────────
         function exportLibrary() {
             const res = getResources();
-            const format = (prompt('Export format? Choose: txt, csv, xlsx', 'txt') || '').toLowerCase().trim();
-            if (!['txt', 'csv', 'xlsx'].includes(format)) return showToast('Export cancelled or invalid format.', 'error');
-            exportByFormat(res, format, `prajnaai-library-${currentUser.username}-${Date.now()}`);
-            showToast(`Library exported as ${format.toUpperCase()}.`, 'success');
+            if (!res.length) return showToast('No resources found to export.', 'info');
+            openChoiceModal({
+                title: 'Export Library',
+                subtitle: 'Choose your file format.',
+                options: [{
+                        label: 'PDF',
+                        value: 'pdf'
+                    },
+                    {
+                        label: 'DOCX',
+                        value: 'docx'
+                    },
+                    {
+                        label: 'TXT',
+                        value: 'txt'
+                    }
+                ],
+                onSelect: (format) => {
+                    exportByFormat(res, format, `prajnaai-library-${currentUser.username}-${Date.now()}`);
+                    showToast(`Library exported as ${format.toUpperCase()}.`, 'success');
+                }
+            });
         }
 
         function triggerImport() {
@@ -2633,27 +2751,65 @@
                 }), `${baseName}.txt`);
                 return;
             }
-            if (format === 'csv') {
-                const rows = [
-                    ['Title', 'Subject', 'Type', 'Date', 'Content'], ...resources.map(r => [r.title, r.subject, r.fileType, formatDate(r.createdAt), (r.content || '').replace(/\n/g, ' ')])
-                ];
-                const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
-                downloadBlob(new Blob([csv], {
-                    type: 'text/csv'
-                }), `${baseName}.csv`);
+            if (format === 'pdf') {
+                if (!window.jspdf || !window.jspdf.jsPDF) {
+                    showToast('PDF export library is unavailable.', 'error');
+                    return;
+                }
+                const doc = new window.jspdf.jsPDF();
+                let y = 12;
+                const writeLine = (line = '') => {
+                    if (y > 280) {
+                        doc.addPage();
+                        y = 12;
+                    }
+                    doc.text(line, 10, y);
+                    y += 6;
+                };
+                resources.forEach((r, i) => {
+                    writeLine(`${i + 1}. ${r.title}`);
+                    writeLine(`Subject: ${r.subject}`);
+                    writeLine(`Type: ${typeLabel(r.fileType)}`);
+                    writeLine(`Date: ${formatDate(r.createdAt)}`);
+                    const lines = doc.splitTextToSize(r.content || '', 185);
+                    lines.forEach(line => writeLine(line));
+                    writeLine('---------------------------');
+                });
+                doc.save(`${baseName}.pdf`);
                 return;
             }
-            const data = resources.map(r => ({
-                Title: r.title,
-                Subject: r.subject,
-                Type: r.fileType,
-                Date: formatDate(r.createdAt),
-                Content: r.content || ''
-            }));
-            const ws = XLSX.utils.json_to_sheet(data);
-            const wb = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(wb, ws, 'Library');
-            XLSX.writeFile(wb, `${baseName}.xlsx`);
+            if (format === 'docx') {
+                if (!window.docx) {
+                    showToast('DOCX export library is unavailable.', 'error');
+                    return;
+                }
+                const {
+                    Document,
+                    Packer,
+                    Paragraph,
+                    HeadingLevel
+                } = window.docx;
+                const sections = [];
+                resources.forEach((r, i) => {
+                    sections.push(new Paragraph({
+                        text: `${i + 1}. ${r.title}`,
+                        heading: HeadingLevel.HEADING_2
+                    }));
+                    sections.push(new Paragraph(`Subject: ${r.subject}`));
+                    sections.push(new Paragraph(`Type: ${typeLabel(r.fileType)}`));
+                    sections.push(new Paragraph(`Date: ${formatDate(r.createdAt)}`));
+                    sections.push(new Paragraph(r.content || 'No content'));
+                    sections.push(new Paragraph(''));
+                });
+                const doc = new Document({
+                    sections: [{
+                        children: sections
+                    }]
+                });
+                Packer.toBlob(doc).then(blob => {
+                    downloadBlob(blob, `${baseName}.docx`);
+                }).catch(() => showToast('Failed to create DOCX file.', 'error'));
+            }
         }
 
         function downloadBlob(blob, filename) {
@@ -2904,6 +3060,40 @@
                 toast.style.transition = 'opacity 0.3s';
                 setTimeout(() => toast.remove(), 300);
             }, 3000);
+        }
+
+        const choiceModalState = {
+            onSelect: null
+        };
+
+        function openChoiceModal({
+            title,
+            subtitle,
+            options,
+            onSelect
+        }) {
+            const modal = document.getElementById('choice-modal');
+            document.getElementById('choice-title').textContent = title || 'Select Option';
+            document.getElementById('choice-sub').textContent = subtitle || '';
+            const wrap = document.getElementById('choice-options');
+            wrap.innerHTML = (options || []).map(opt => `<button class="choice-option" data-value="${escHtml(opt.value)}">${escHtml(opt.label)}</button>`).join('');
+            choiceModalState.onSelect = onSelect || null;
+            wrap.querySelectorAll('.choice-option').forEach(btn => {
+                btn.addEventListener('click', () => {
+                    closeChoiceModalDirect();
+                    if (choiceModalState.onSelect) choiceModalState.onSelect(btn.getAttribute('data-value'));
+                });
+            });
+            modal.classList.add('show');
+        }
+
+        function closeChoiceModal(e) {
+            if (e.target === document.getElementById('choice-modal')) closeChoiceModalDirect();
+        }
+
+        function closeChoiceModalDirect() {
+            document.getElementById('choice-modal').classList.remove('show');
+            choiceModalState.onSelect = null;
         }
 
         // ─── UTIL ────────────────────────────────────────────────────────────────────
