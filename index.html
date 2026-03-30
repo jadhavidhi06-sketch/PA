@@ -1420,6 +1420,72 @@
             }
         }
 
+
+
+        .sidebar.collapsed {
+            width: 76px;
+        }
+
+        .sidebar.collapsed .logo-text,
+        .sidebar.collapsed .nav-section-label,
+        .sidebar.collapsed .nav-item span,
+        .sidebar.collapsed .nav-badge,
+        .sidebar.collapsed .pomodoro-widget {
+            display: none;
+        }
+
+        .sidebar.collapsed .nav-item {
+            justify-content: center;
+        }
+
+        .main.sidebar-collapsed {
+            margin-left: 76px;
+        }
+
+        .topbar.sidebar-collapsed {
+            left: 76px;
+        }
+
+        .chat-launcher {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: 1px solid var(--border);
+            background: var(--orange);
+            color: #fff;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            box-shadow: 0 12px 30px rgba(255, 102, 0, 0.35);
+        }
+
+        .social-card-actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 10px;
+            flex-wrap: wrap;
+        }
+
+        .social-pill {
+            background: var(--card2);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 4px 10px;
+            font-size: 11px;
+            color: var(--muted);
+        }
+
+        .moderation-notice {
+            font-size: 12px;
+            color: #f59e0b;
+            border: 1px solid rgba(245, 158, 11, 0.3);
+            background: rgba(245, 158, 11, 0.08);
+            border-radius: 10px;
+            padding: 8px 10px;
+            margin-bottom: 10px;
+        }
+
         /* Notification dot */
         .notif-dot {
             width: 7px;
@@ -1550,7 +1616,10 @@
         </aside>
 
         <!-- TOPBAR -->
-        <header class="topbar">
+        <header class="topbar" id="app-topbar">
+            <button class="topbar-btn" onclick="toggleSidebar()" title="Toggle dashboard sidebar">
+                <i data-lucide="panel-left" style="width:15px;height:15px;"></i>
+            </button>
             <div class="topbar-search" onclick="openCmd()">
                 <i data-lucide="search" style="width:15px;height:15px;color:var(--muted);"></i>
                 <span>Search resources...</span>
@@ -1712,6 +1781,22 @@
                         <input class="form-input" id="upload-subject" type="text" placeholder="e.g. Mathematics, Physics, History" list="subject-suggestions" />
                         <datalist id="subject-suggestions"></datalist>
                     </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Document Privacy *</label>
+                        <select class="form-input" id="upload-privacy" onchange="onPrivacyChange()">
+                            <option value="private">Private (only me)</option>
+                            <option value="public">Public</option>
+                        </select>
+                    </div>
+                    <div class="form-group" id="public-scope-group" style="display:none;">
+                        <label class="form-label">If Public, share with</label>
+                        <select class="form-input" id="upload-public-scope">
+                            <option value="friends">Friends only</option>
+                            <option value="social">Everyone (Social feed)</option>
+                        </select>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label">Notes / Content (optional)</label>
                         <textarea class="form-input" id="upload-content" rows="4" placeholder="Add any notes, summary, or content for this resource..."></textarea>
@@ -1776,8 +1861,13 @@
                         <div id="friend-requests-box"></div>
                     </div>
                     <div class="collab-panel">
-                        <h3>💬 Collab Chat</h3>
-                        <p>Chat with your accepted friends and discuss topics or files from the vault.</p>
+                        <h3>💬 Social Room & Private Room</h3>
+                        <p>Use Social Room for everyone, and Private Room for friends-only conversations.</p>
+                        <div class="moderation-notice">Community rule: No vulgar/abusive language is tolerated. Keep chats respectful.</div>
+                        <div style="display:flex;gap:8px;margin-bottom:10px;">
+                            <button class="pomo-btn running" id="room-social-btn" onclick="switchRoomType('social')">Social Room</button>
+                            <button class="pomo-btn" id="room-private-btn" onclick="switchRoomType('private')">Private Room</button>
+                        </div>
                         <div id="friend-list-box" style="max-height:150px;overflow:auto;margin-bottom:10px;"></div>
                         <div id="chat-thread" style="min-height:140px;max-height:220px;overflow:auto;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;"></div>
                         <div class="join-input-row">
@@ -1786,6 +1876,10 @@
                         </div>
                     </div>
                 </div>
+            <div class="collab-panel" style="margin-top:20px;">
+                <h3>🌍 Social Materials</h3>
+                <p>Public resources shared by students (with likes, reviews, and comments).</p>
+                <div id="social-materials"></div>
             </div>
         </main>
     </div>
@@ -1833,7 +1927,7 @@
 
     <!-- TOAST CONTAINER -->
     <div id="toast-container"></div>
-    <div id="ai-chat-widget" style="position:fixed;right:16px;bottom:16px;z-index:1999;width:min(360px,calc(100vw - 24px));">
+    <div id="ai-chat-widget" style="position:fixed;right:16px;bottom:16px;z-index:1999;width:min(360px,calc(100vw - 24px));display:none;">
         <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
             <button onclick="toggleAiChat()" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card2);border:none;color:var(--text);cursor:pointer;">
                 <span style="font-weight:600;">🤖 PrajnaAI Tutor</span>
@@ -1848,6 +1942,9 @@
             </div>
         </div>
     </div>
+    <button class="chat-launcher" id="chat-launcher" onclick="openAiWidget()" title="Open AI Tutor" style="position:fixed;right:16px;bottom:16px;z-index:1998;">
+        <i data-lucide="bot" style="width:24px;height:24px;"></i>
+    </button>
 
     <script>
         // ─── GLOBAL STATE ────────────────────────────────────────────────────────────
@@ -1858,6 +1955,9 @@
         let roomCodeMap = {}; // stored in localStorage globally
         let activeChatFriend = '';
         let aiChatOpen = true;
+        let roomType = "social";
+        const BANNED_WORDS = ["fuck","shit","bitch","asshole","bastard","slut"];
+        const CLOUD_SYNC_URL = localStorage.getItem("ev_cloud_sync_url") || "";
 
         // ─── AUTH ────────────────────────────────────────────────────────────────────
         function getUsers() {
@@ -1918,6 +2018,22 @@
 
         function saveChats(v) {
             localStorage.setItem('ev_chats', JSON.stringify(v));
+        }
+
+        function getSocialResources() {
+            return JSON.parse(localStorage.getItem('ev_social_resources') || '[]');
+        }
+
+        function saveSocialResources(v) {
+            localStorage.setItem('ev_social_resources', JSON.stringify(v));
+        }
+
+        function getSocialChat() {
+            return JSON.parse(localStorage.getItem('ev_social_chat') || '[]');
+        }
+
+        function saveSocialChat(v) {
+            localStorage.setItem('ev_social_chat', JSON.stringify(v));
         }
 
         function switchTab(tab) {
@@ -1993,7 +2109,7 @@
             lucide.createIcons();
 
             // Load data
-            refreshAll();
+            syncPull().finally(() => { refreshAll(); });
             populateSubjectSuggestions();
             refreshFriendUI();
             initPomodoro();
@@ -2073,6 +2189,7 @@
             renderSubjectsOverview(res);
             document.getElementById('vault-count').textContent = res.length;
             refreshFriendUI();
+            renderSocialMaterials();
             lucide.createIcons();
         }
 
@@ -2298,6 +2415,9 @@
                 }
             }
 
+            const privacy = document.getElementById('upload-privacy').value;
+            const publicScope = document.getElementById('upload-public-scope').value;
+            const fileDataUrl = currentFile ? await fileToDataUrl(currentFile) : '';
             const resource = {
                 id: 'res_' + Date.now() + '_' + Math.random().toString(36).substr(2, 5),
                 title,
@@ -2306,14 +2426,26 @@
                 fileName: currentFile ? currentFile.name : '',
                 fileType: currentFile ? getFileType(currentFile.name) : 'txt',
                 fileSize: currentFile ? currentFile.size : 0,
+                fileDataUrl,
+                visibility: privacy === 'private' ? 'private' : (publicScope === 'friends' ? 'public-friends' : 'public-social'),
+                likes: [],
+                comments: [],
+                reviews: [],
+                owner: currentUser.username,
                 createdAt: Date.now()
             };
 
             const resources = getResources();
             resources.push(resource);
             saveResources(resources);
+            if (resource.visibility === 'public-social') {
+                const social = getSocialResources();
+                social.push(resource);
+                saveSocialResources(social);
+            }
+            syncPush();
             clearUploadForm();
-            refreshAll();
+            syncPull().finally(() => { refreshAll(); });
             populateSubjectSuggestions();
             showToast(`"${title}" saved to vault!`, 'success');
             showPage('vault', document.querySelectorAll('.nav-item')[1]);
@@ -2324,6 +2456,8 @@
             document.getElementById('upload-subject').value = '';
             document.getElementById('upload-content').value = '';
             clearFile();
+            document.getElementById('upload-privacy').value = 'private';
+            onPrivacyChange();
         }
 
         function populateSubjectSuggestions() {
@@ -2337,14 +2471,14 @@
             if (!confirm('Delete this resource?')) return;
             const res = getResources().filter(r => r.id !== id);
             saveResources(res);
-            refreshAll();
+            syncPull().finally(() => { refreshAll(); });
             showToast('Resource deleted.', 'info');
         }
 
         // ─── READING MODAL ───────────────────────────────────────────────────────────
         let readingResources = null;
 
-        function openReading(id, readOnly, customRes = null) {
+        async function openReading(id, readOnly, customRes = null) {
             const resList = customRes || getResources();
             const r = resList.find(x => x.id === id);
             if (!r) return;
@@ -2362,6 +2496,9 @@
                     html += `<p style="white-space:pre-wrap;">${escHtml(r.content)}</p>`;
                 }
             }
+            if (r.fileType === 'pdf' && r.fileDataUrl) {
+                html += `<div id="pdf-viewer-box" style="margin-top:14px;"></div>`;
+            }
             if (r.fileName) {
                 html += `<div class="reading-file-info" style="margin-top:${r.content ? '20px' : '0'};">
       <i data-lucide="${typeIcon(r.fileType)}" style="width:18px;height:18px;color:var(--orange);"></i>
@@ -2376,6 +2513,7 @@
             }
             body.innerHTML = html;
             document.getElementById('reading-modal').classList.add('show');
+            if (r.fileType === 'pdf' && r.fileDataUrl) await renderPdfInModal(r.fileDataUrl);
             lucide.createIcons();
         }
 
@@ -2432,8 +2570,10 @@
 
         // Override openReading to support collab resources
         const _openReading = openReading;
-        window.openReading = function(id, readOnly, customRes) {
-            if (readOnly && readingResources) {
+        window.openReading = async function(id, readOnly, customRes) {
+            if (readOnly && customRes) {
+                _openReading(id, true, customRes);
+            } else if (readOnly && readingResources) {
                 _openReading(id, true, readingResources);
             } else {
                 _openReading(id, readOnly, null);
@@ -2471,7 +2611,7 @@
                 };
                 const existing = getResources();
                 saveResources([...existing, resource]);
-                refreshAll();
+                syncPull().finally(() => { refreshAll(); });
                 showToast(`Imported "${file.name}" successfully.`, 'success');
             }).catch(() => showToast('Unsupported or invalid file.', 'error'));
             e.target.value = '';
@@ -2825,8 +2965,8 @@
             const friendships = getFriendships();
             const mine = friendships[currentUser.username] || [];
             if (!activeChatFriend && mine.length) activeChatFriend = mine[0];
-            document.getElementById('friend-list-box').innerHTML = mine.length ? mine.map(f => `
-    <button class="pomo-btn ${activeChatFriend===f?'running':''}" style="margin:0 6px 6px 0;" onclick="openFriendChat('${f}')">${escHtml(f)}</button>`).join('') : '<p style="font-size:12px;color:var(--muted);">No friends yet.</p>';
+            document.getElementById('friend-list-box').innerHTML = roomType === 'private' ? (mine.length ? mine.map(f => `
+    <button class="pomo-btn ${activeChatFriend===f?'running':''}" style="margin:0 6px 6px 0;" onclick="openFriendChat('${f}')">${escHtml(f)}</button>`).join('') : '<p style="font-size:12px;color:var(--muted);">No friends yet for private room.</p>') : '<p style="font-size:12px;color:var(--muted);">Social Room includes all students.</p>';
             renderChatThread();
         }
 
@@ -2855,10 +2995,20 @@
         }
 
         function sendChatMessage() {
-            if (!activeChatFriend) return showToast('Select a friend first.', 'error');
             const input = document.getElementById('chat-message-input');
             const text = input.value.trim();
             if (!text) return;
+            if (containsVulgarLanguage(text)) return showToast('Vulgar language is not tolerated.', 'error');
+            if (roomType === 'social') {
+                const social = getSocialChat();
+                social.push({ from: currentUser.username, text, at: Date.now() });
+                saveSocialChat(social);
+                syncPush();
+                input.value = '';
+                renderChatThread();
+                return;
+            }
+            if (!activeChatFriend) return showToast('Select a friend first.', 'error');
             const chats = getChats();
             const key = chatKey(currentUser.username, activeChatFriend);
             if (!chats[key]) chats[key] = [];
@@ -2868,6 +3018,7 @@
                 at: Date.now()
             });
             saveChats(chats);
+            syncPush();
             input.value = '';
             renderChatThread();
         }
@@ -2875,6 +3026,12 @@
         function renderChatThread() {
             const box = document.getElementById('chat-thread');
             if (!box) return;
+            if (roomType === 'social') {
+                const chats = getSocialChat();
+                box.innerHTML = chats.length ? chats.slice(-60).map(c => `<div style="margin-bottom:8px;text-align:${c.from===currentUser.username?'right':'left'};"><span style="display:inline-block;background:${c.from===currentUser.username?'var(--orange-dim)':'#191919'};padding:6px 8px;border-radius:8px;max-width:88%;"><strong style="font-size:11px;opacity:.8;">${escHtml(c.from)}:</strong> ${escHtml(c.text)}</span></div>`).join('') : '<p style="font-size:12px;color:var(--muted);">No social messages yet.</p>';
+                box.scrollTop = box.scrollHeight;
+                return;
+            }
             if (!activeChatFriend) {
                 box.innerHTML = '<p style="font-size:12px;color:var(--muted);">Choose a friend to start chatting.</p>';
                 return;
@@ -2888,6 +3045,10 @@
             aiChatOpen = !aiChatOpen;
             document.getElementById('ai-chat-body').style.display = aiChatOpen ? '' : 'none';
             document.getElementById('ai-toggle-icon').setAttribute('data-lucide', aiChatOpen ? 'chevron-up' : 'chevron-down');
+            if (!aiChatOpen) {
+                document.getElementById('ai-chat-widget').style.display = 'none';
+                document.getElementById('chat-launcher').style.display = 'flex';
+            }
             lucide.createIcons();
         }
 
@@ -2903,6 +3064,171 @@
             log.scrollTop = log.scrollHeight;
         }
 
+
+        function containsVulgarLanguage(text) {
+            const t = text.toLowerCase();
+            return BANNED_WORDS.some(w => t.includes(w));
+        }
+
+        function switchRoomType(type) {
+            roomType = type;
+            document.getElementById('room-social-btn').classList.toggle('running', type === 'social');
+            document.getElementById('room-private-btn').classList.toggle('running', type === 'private');
+            refreshFriendUI();
+        }
+
+        function onPrivacyChange() {
+            const isPublic = document.getElementById('upload-privacy').value === 'public';
+            document.getElementById('public-scope-group').style.display = isPublic ? '' : 'none';
+        }
+
+        function toggleSidebar() {
+            document.querySelector('.sidebar').classList.toggle('collapsed');
+            document.querySelector('.main').classList.toggle('sidebar-collapsed');
+            document.getElementById('app-topbar').classList.toggle('sidebar-collapsed');
+        }
+
+        function openAiWidget() {
+            document.getElementById('ai-chat-widget').style.display = 'block';
+            document.getElementById('chat-launcher').style.display = 'none';
+            aiChatOpen = true;
+            document.getElementById('ai-chat-body').style.display = '';
+            document.getElementById('ai-toggle-icon').setAttribute('data-lucide', 'chevron-up');
+            lucide.createIcons();
+        }
+
+        async function fileToDataUrl(file) {
+            return new Promise((resolve) => {
+                const reader = new FileReader();
+                reader.onload = () => resolve(reader.result || '');
+                reader.onerror = () => resolve('');
+                reader.readAsDataURL(file);
+            });
+        }
+
+        async function renderPdfInModal(dataUrl) {
+            try {
+                const box = document.getElementById('pdf-viewer-box');
+                if (!box || !window.pdfjsLib) return;
+                box.innerHTML = '<p style="font-size:12px;color:var(--muted);margin-bottom:8px;">PDF preview (including images):</p>';
+                const bytes = atob(dataUrl.split(',')[1]);
+                const arr = new Uint8Array(bytes.length);
+                for (let i = 0; i < bytes.length; i++) arr[i] = bytes.charCodeAt(i);
+                const pdf = await window.pdfjsLib.getDocument({ data: arr }).promise;
+                const pages = Math.min(pdf.numPages, 4);
+                for (let i = 1; i <= pages; i++) {
+                    const page = await pdf.getPage(i);
+                    const viewport = page.getViewport({ scale: 1.2 });
+                    const canvas = document.createElement('canvas');
+                    const ctx = canvas.getContext('2d');
+                    canvas.width = viewport.width;
+                    canvas.height = viewport.height;
+                    canvas.style.width = '100%';
+                    canvas.style.border = '1px solid var(--border)';
+                    canvas.style.borderRadius = '10px';
+                    canvas.style.marginBottom = '10px';
+                    await page.render({ canvasContext: ctx, viewport }).promise;
+                    box.appendChild(canvas);
+                }
+            } catch (e) {
+                showToast('PDF preview unavailable for this file.', 'info');
+            }
+        }
+
+        function renderSocialMaterials() {
+            const list = getSocialResources().sort((a, b) => b.createdAt - a.createdAt);
+            const box = document.getElementById('social-materials');
+            if (!box) return;
+            if (!list.length) {
+                box.innerHTML = '<p style="font-size:12px;color:var(--muted);">No public materials yet.</p>';
+                return;
+            }
+            box.innerHTML = list.map(r => `
+            <div class="resource-card" style="margin-bottom:12px;cursor:default;">
+                <div style="display:flex;justify-content:space-between;gap:8px;align-items:center;">
+                    <div>
+                        <div class="card-title">${escHtml(r.title)}</div>
+                        <div style="font-size:12px;color:var(--muted);">${escHtml(r.subject)} • by ${escHtml(r.owner || 'student')}</div>
+                    </div>
+                    <span class="social-pill">Social</span>
+                </div>
+                <div class="social-card-actions">
+                    <button class="pomo-btn" onclick="likeSocialMaterial('${r.id}')">👍 ${r.likes?.length || 0}</button>
+                    <button class="pomo-btn" onclick="commentSocialMaterial('${r.id}')">💬 Comment</button>
+                    <button class="pomo-btn" onclick="reviewSocialMaterial('${r.id}')">⭐ Review</button>
+                    <button class="pomo-btn" onclick="openReading('${r.id}', true, getSocialResources())">Open</button>
+                </div>
+                <div style="font-size:12px;color:var(--muted);margin-top:8px;">Comments: ${(r.comments || []).slice(-2).map(c => escHtml(c.text)).join(' • ') || 'No comments yet'}</div>
+            </div>`).join('');
+        }
+
+        function updateSocialResource(id, updater) {
+            const social = getSocialResources();
+            const idx = social.findIndex(x => x.id === id);
+            if (idx === -1) return;
+            updater(social[idx]);
+            saveSocialResources(social);
+            syncPush();
+            renderSocialMaterials();
+        }
+
+        function likeSocialMaterial(id) {
+            updateSocialResource(id, (r) => {
+                r.likes = r.likes || [];
+                if (!r.likes.includes(currentUser.username)) r.likes.push(currentUser.username);
+            });
+        }
+
+        function commentSocialMaterial(id) {
+            const text = prompt('Add your comment');
+            if (!text) return;
+            if (containsVulgarLanguage(text)) return showToast('Vulgar language is not allowed.', 'error');
+            updateSocialResource(id, (r) => {
+                r.comments = r.comments || [];
+                r.comments.push({ user: currentUser.username, text, at: Date.now() });
+            });
+        }
+
+        function reviewSocialMaterial(id) {
+            const text = prompt('Add your short review');
+            if (!text) return;
+            updateSocialResource(id, (r) => {
+                r.reviews = r.reviews || [];
+                r.reviews.push({ user: currentUser.username, text, at: Date.now() });
+            });
+        }
+
+        async function syncPull() {
+            if (!CLOUD_SYNC_URL || !currentUser) return;
+            try {
+                const res = await fetch(`${CLOUD_SYNC_URL.replace(/\/$/, '')}/${currentUser.username}.json`);
+                if (!res.ok) return;
+                const data = await res.json();
+                if (Array.isArray(data.resources)) saveUserData(currentUser.username, data.resources);
+                if (Array.isArray(data.socialResources)) saveSocialResources(data.socialResources);
+                if (Array.isArray(data.socialChat)) saveSocialChat(data.socialChat);
+            } catch (e) {
+                showToast('Cloud sync pull unavailable (configure ev_cloud_sync_url).', 'info');
+            }
+        }
+
+        async function syncPush() {
+            if (!CLOUD_SYNC_URL || !currentUser) return;
+            try {
+                await fetch(`${CLOUD_SYNC_URL.replace(/\/$/, '')}/${currentUser.username}.json`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        resources: getResources(),
+                        socialResources: getSocialResources(),
+                        socialChat: getSocialChat()
+                    })
+                });
+            } catch (e) {
+                showToast('Cloud sync push unavailable.', 'info');
+            }
+        }
+
         // ─── BOOT ────────────────────────────────────────────────────────────────────
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -2910,6 +3236,7 @@
                 window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
             }
             checkSession();
+            onPrivacyChange();
 
             // Keyboard enter on auth
             document.getElementById('login-pass').addEventListener('keydown', e => {
