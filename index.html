@@ -2095,6 +2095,7 @@
         let activeChatFriend = '';
         let aiChatOpen = true;
         let roomType = "social";
+        let cloudSyncInterval = null;
         const BANNED_WORDS = ["fuck", "shit", "bitch", "asshole", "bastard", "slut"];
         const CLOUD_SYNC_URL = localStorage.getItem("ev_cloud_sync_url") || "";
 
@@ -2221,6 +2222,10 @@
         }
 
         function doLogout() {
+            if (cloudSyncInterval) {
+                clearInterval(cloudSyncInterval);
+                cloudSyncInterval = null;
+            }
             clearSession();
             location.reload();
         }
@@ -2255,6 +2260,7 @@
             refreshFriendUI();
             initPomodoro();
             setupKeyboard();
+            startCloudAutoSync();
         }
 
         function checkSession() {
@@ -2686,6 +2692,7 @@
                 created: Date.now()
             };
             saveRoomCodes(rooms);
+            syncPush();
             document.getElementById('room-code-display').textContent = code;
             document.getElementById('room-code-display').classList.add('show');
             document.getElementById('copy-code-btn').style.display = 'flex';
@@ -2782,9 +2789,18 @@
             e.target.value = '';
         }
 
+        function parseExcelPreview(content) {
+            if (!content || !content.includes(',')) return [];
+            return content.split('\n').filter(Boolean).map(line => line.split(',').map(col => col.replace(/^"|"$/g, '').trim()));
+        }
+
         function exportByFormat(resources, format, baseName) {
             if (format === 'txt') {
-                const body = resources.map((r, i) => `${i+1}. ${r.title}\nSubject: ${r.subject}\nType: ${r.fileType}\nDate: ${formatDate(r.createdAt)}\n${r.content || ''}\n`).join('\n---\n');
+                const body = resources.map((r, i) => {
+                    const rows = parseExcelPreview(r.content || '');
+                    const excelBlock = rows.length ? `\nTable:\n${rows.map(row => row.join(' | ')).join('\n')}` : '';
+                    return `${i+1}. ${r.title}\nSubject: ${r.subject}\nType: ${r.fileType}\nDate: ${formatDate(r.createdAt)}\n${r.content || ''}${excelBlock}\n`;
+                }).join('\n---\n');
                 downloadBlob(new Blob([body], {
                     type: 'text/plain'
                 }), `${baseName}.txt`);
@@ -2810,8 +2826,17 @@
                     writeLine(`Subject: ${r.subject}`);
                     writeLine(`Type: ${typeLabel(r.fileType)}`);
                     writeLine(`Date: ${formatDate(r.createdAt)}`);
-                    const lines = doc.splitTextToSize(r.content || '', 185);
-                    lines.forEach(line => writeLine(line));
+                    const rows = parseExcelPreview(r.content || '');
+                    if (rows.length) {
+                        rows.slice(0, 30).forEach((row, rowIdx) => {
+                            const line = `${rowIdx === 0 ? 'Header' : 'Row'}: ${row.join(' | ')}`;
+                            const lines = doc.splitTextToSize(line, 185);
+                            lines.forEach(wrapped => writeLine(wrapped));
+                        });
+                    } else {
+                        const lines = doc.splitTextToSize(r.content || '', 185);
+                        lines.forEach(line => writeLine(line));
+                    }
                     writeLine('---------------------------');
                 });
                 doc.save(`${baseName}.pdf`);
@@ -2826,7 +2851,11 @@
                     Document,
                     Packer,
                     Paragraph,
-                    HeadingLevel
+                    HeadingLevel,
+                    Table,
+                    TableRow,
+                    TableCell,
+                    WidthType
                 } = window.docx;
                 const sections = [];
                 resources.forEach((r, i) => {
@@ -2837,7 +2866,27 @@
                     sections.push(new Paragraph(`Subject: ${r.subject}`));
                     sections.push(new Paragraph(`Type: ${typeLabel(r.fileType)}`));
                     sections.push(new Paragraph(`Date: ${formatDate(r.createdAt)}`));
-                    sections.push(new Paragraph(r.content || 'No content'));
+                    const rows = parseExcelPreview(r.content || '');
+                    if (rows.length) {
+                        const tableRows = rows.slice(0, 40).map((row) => new TableRow({
+                            children: row.map(col => new TableCell({
+                                width: {
+                                    size: Math.max(10, Math.floor(100 / Math.max(1, row.length))),
+                                    type: WidthType.PERCENTAGE
+                                },
+                                children: [new Paragraph(col || ' ')]
+                            }))
+                        }));
+                        sections.push(new Table({
+                            width: {
+                                size: 100,
+                                type: WidthType.PERCENTAGE
+                            },
+                            rows: tableRows
+                        }));
+                    } else {
+                        sections.push(new Paragraph(r.content || 'No content'));
+                    }
                     sections.push(new Paragraph(''));
                 });
                 const doc = new Document({
@@ -3230,6 +3279,7 @@
             if (!requests[to]) requests[to] = [];
             if (!requests[to].includes(currentUser.username)) requests[to].push(currentUser.username);
             saveFriendRequests(requests);
+            syncPush();
             document.getElementById('friend-user-input').value = '';
             showToast('Friend request sent.', 'success');
         }
@@ -3265,6 +3315,7 @@
                 if (!friends[fromUser].includes(currentUser.username)) friends[fromUser].push(currentUser.username);
                 saveFriendships(friends);
             }
+            syncPush();
             refreshFriendUI();
         }
 
@@ -3512,15 +3563,44 @@
             });
         }
 
+        function getCloudSnapshot() {
+            return {
+                resources: getResources(),
+                socialResources: getSocialResources(),
+                socialChat: getSocialChat(),
+                friendRequests: getFriendRequests(),
+                friendships: getFriendships(),
+                chats: getChats(),
+                roomCodes: getRoomCodes(),
+                updatedAt: Date.now()
+            };
+        }
+
+        function applyCloudSnapshot(data) {
+            if (Array.isArray(data.resources)) saveUserData(currentUser.username, data.resources);
+            if (Array.isArray(data.socialResources)) saveSocialResources(data.socialResources);
+            if (Array.isArray(data.socialChat)) saveSocialChat(data.socialChat);
+            if (data.friendRequests && typeof data.friendRequests === 'object') saveFriendRequests(data.friendRequests);
+            if (data.friendships && typeof data.friendships === 'object') saveFriendships(data.friendships);
+            if (data.chats && typeof data.chats === 'object') saveChats(data.chats);
+            if (data.roomCodes && typeof data.roomCodes === 'object') saveRoomCodes(data.roomCodes);
+        }
+
+        function startCloudAutoSync() {
+            if (!CLOUD_SYNC_URL || !currentUser) return;
+            if (cloudSyncInterval) clearInterval(cloudSyncInterval);
+            cloudSyncInterval = setInterval(() => {
+                syncPull().finally(() => refreshAll());
+            }, 15000);
+        }
+
         async function syncPull() {
             if (!CLOUD_SYNC_URL || !currentUser) return;
             try {
                 const res = await fetch(`${CLOUD_SYNC_URL.replace(/\/$/, '')}/${currentUser.username}.json`);
                 if (!res.ok) return;
                 const data = await res.json();
-                if (Array.isArray(data.resources)) saveUserData(currentUser.username, data.resources);
-                if (Array.isArray(data.socialResources)) saveSocialResources(data.socialResources);
-                if (Array.isArray(data.socialChat)) saveSocialChat(data.socialChat);
+                applyCloudSnapshot(data);
             } catch (e) {
                 showToast('Cloud sync pull unavailable (configure ev_cloud_sync_url).', 'info');
             }
@@ -3534,11 +3614,7 @@
                     headers: {
                         'Content-Type': 'application/json'
                     },
-                    body: JSON.stringify({
-                        resources: getResources(),
-                        socialResources: getSocialResources(),
-                        socialChat: getSocialChat()
-                    })
+                    body: JSON.stringify(getCloudSnapshot())
                 });
             } catch (e) {
                 showToast('Cloud sync push unavailable.', 'info');
@@ -3565,6 +3641,10 @@
             // Join code uppercase
             document.getElementById('join-code-input').addEventListener('input', function() {
                 this.value = this.value.toUpperCase();
+            });
+
+            window.addEventListener('beforeunload', () => {
+                if (currentUser) syncPush();
             });
         });
     </script>
