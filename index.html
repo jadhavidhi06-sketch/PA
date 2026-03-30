@@ -1382,6 +1382,36 @@
             background: #171717;
         }
 
+        .prompt-input {
+            width: 100%;
+            background: #0f0f0f;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            padding: 11px 12px;
+            margin-bottom: 10px;
+            outline: none;
+        }
+
+        .prompt-input:focus {
+            border-color: var(--orange);
+            box-shadow: 0 0 0 3px var(--orange-dim);
+        }
+
+        .choice-confirm {
+            width: 100%;
+            border: 1px solid var(--orange);
+            border-radius: 10px;
+            background: var(--orange);
+            color: #fff;
+            padding: 9px 11px;
+            cursor: pointer;
+            font-weight: 600;
+            margin-bottom: 8px;
+        }
+
         /* RECENT ACTIVITY */
         .activity-list {
             display: flex;
@@ -2025,6 +2055,15 @@
             <div class="choice-sub" id="choice-sub">Choose one option below.</div>
             <div class="choice-options" id="choice-options"></div>
             <button class="choice-cancel" onclick="closeChoiceModalDirect()">Cancel</button>
+        </div>
+    </div>
+    <div class="choice-modal" id="prompt-modal" onclick="closePromptModal(event)">
+        <div class="choice-card">
+            <div class="choice-title" id="prompt-title">Enter text</div>
+            <div class="choice-sub" id="prompt-sub">Write your message below.</div>
+            <input class="prompt-input" id="prompt-input" type="text" placeholder="Type here..." />
+            <button class="choice-confirm" onclick="submitPromptModal()">Submit</button>
+            <button class="choice-cancel" onclick="closePromptModalDirect()">Cancel</button>
         </div>
     </div>
     <div id="ai-chat-widget" style="position:fixed;right:16px;bottom:16px;z-index:1999;width:min(360px,calc(100vw - 24px));display:none;">
@@ -3038,6 +3077,12 @@
                 if (e.key === 'Escape') {
                     closeCmdDirect();
                     document.getElementById('reading-modal').classList.remove('show');
+                    closeChoiceModalDirect();
+                    closePromptModalDirect();
+                }
+                if (e.key === 'Enter' && document.getElementById('prompt-modal').classList.contains('show')) {
+                    e.preventDefault();
+                    submitPromptModal();
                 }
             });
         }
@@ -3066,6 +3111,10 @@
             onSelect: null
         };
 
+        const promptModalState = {
+            onSubmit: null
+        };
+
         function openChoiceModal({
             title,
             subtitle,
@@ -3080,8 +3129,10 @@
             choiceModalState.onSelect = onSelect || null;
             wrap.querySelectorAll('.choice-option').forEach(btn => {
                 btn.addEventListener('click', () => {
+                    const callback = choiceModalState.onSelect;
+                    const pickedValue = btn.getAttribute('data-value');
                     closeChoiceModalDirect();
-                    if (choiceModalState.onSelect) choiceModalState.onSelect(btn.getAttribute('data-value'));
+                    if (callback) callback(pickedValue);
                 });
             });
             modal.classList.add('show');
@@ -3094,6 +3145,40 @@
         function closeChoiceModalDirect() {
             document.getElementById('choice-modal').classList.remove('show');
             choiceModalState.onSelect = null;
+        }
+
+        function openPromptModal({
+            title,
+            subtitle,
+            placeholder,
+            onSubmit
+        }) {
+            document.getElementById('prompt-title').textContent = title || 'Enter text';
+            document.getElementById('prompt-sub').textContent = subtitle || '';
+            const input = document.getElementById('prompt-input');
+            input.placeholder = placeholder || 'Type here...';
+            input.value = '';
+            promptModalState.onSubmit = onSubmit || null;
+            document.getElementById('prompt-modal').classList.add('show');
+            setTimeout(() => input.focus(), 30);
+        }
+
+        function closePromptModal(e) {
+            if (e.target === document.getElementById('prompt-modal')) closePromptModalDirect();
+        }
+
+        function closePromptModalDirect() {
+            document.getElementById('prompt-modal').classList.remove('show');
+            promptModalState.onSubmit = null;
+        }
+
+        function submitPromptModal() {
+            const input = document.getElementById('prompt-input');
+            const value = input.value.trim();
+            if (!value) return showToast('Please type a value first.', 'error');
+            const callback = promptModalState.onSubmit;
+            closePromptModalDirect();
+            if (callback) callback(value);
         }
 
         // ─── UTIL ────────────────────────────────────────────────────────────────────
@@ -3389,29 +3474,41 @@
         }
 
         function commentSocialMaterial(id) {
-            const text = prompt('Add your comment');
-            if (!text) return;
-            if (containsVulgarLanguage(text)) return showToast('Vulgar language is not allowed.', 'error');
-            updateSocialResource(id, (r) => {
-                r.comments = r.comments || [];
-                r.comments.push({
-                    user: currentUser.username,
-                    text,
-                    at: Date.now()
-                });
+            openPromptModal({
+                title: 'Add Comment',
+                subtitle: 'Share a respectful message on this material.',
+                placeholder: 'Write your comment...',
+                onSubmit: (text) => {
+                    if (containsVulgarLanguage(text)) return showToast('Vulgar language is not allowed.', 'error');
+                    updateSocialResource(id, (r) => {
+                        r.comments = r.comments || [];
+                        r.comments.push({
+                            user: currentUser.username,
+                            text,
+                            at: Date.now()
+                        });
+                    });
+                    showToast('Comment added.', 'success');
+                }
             });
         }
 
         function reviewSocialMaterial(id) {
-            const text = prompt('Add your short review');
-            if (!text) return;
-            updateSocialResource(id, (r) => {
-                r.reviews = r.reviews || [];
-                r.reviews.push({
-                    user: currentUser.username,
-                    text,
-                    at: Date.now()
-                });
+            openPromptModal({
+                title: 'Add Review',
+                subtitle: 'Post a short review about this material.',
+                placeholder: 'Write your review...',
+                onSubmit: (text) => {
+                    updateSocialResource(id, (r) => {
+                        r.reviews = r.reviews || [];
+                        r.reviews.push({
+                            user: currentUser.username,
+                            text,
+                            at: Date.now()
+                        });
+                    });
+                    showToast('Review added.', 'success');
+                }
             });
         }
 
