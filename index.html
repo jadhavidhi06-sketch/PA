@@ -7,6 +7,9 @@
 <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700;800;900&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet" />
 <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
 <script src="https://cdn.tailwindcss.com"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.8.0/mammoth.browser.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
 <style>
   :root {
     --bg: #0A0A0A;
@@ -838,6 +841,22 @@
     .stats-grid { grid-template-columns: repeat(2,1fr); }
     .collab-grid { grid-template-columns: 1fr; }
   }
+  @media (max-width: 780px) {
+    :root { --sidebar-w: 100%; }
+    .sidebar {
+      position: static;
+      width: 100%;
+      height: auto;
+      border-right: none;
+      border-bottom: 1px solid var(--border);
+    }
+    .topbar, .main { margin-left: 0; left: 0; }
+    .topbar { position: sticky; top: 0; padding: 0 12px; }
+    .topbar-search { max-width: none; }
+    .page { padding: 20px 12px; }
+    .auth-card { width: calc(100% - 24px); padding: 24px; }
+    .stats-grid { grid-template-columns: 1fr; }
+  }
 
   /* Notification dot */
   .notif-dot {
@@ -859,7 +878,7 @@
         <i data-lucide="book-open" style="width:20px;height:20px;color:white;"></i>
       </div>
       <div>
-        <h2 style="font-size:18px;font-weight:700;">Prajna<span style="color:var(--orange)">AI</span> Pro</h2>
+        <h2 style="font-size:18px;font-weight:700;">Prajna<span style="color:var(--orange)">AI</span></h2>
         <p style="font-size:11px;color:var(--muted);">Private Student Resource Hub</p>
       </div>
     </div>
@@ -878,6 +897,10 @@
         <input class="form-input" id="login-pass" type="password" placeholder="••••••••" autocomplete="current-password" />
       </div>
       <button class="btn-primary" onclick="doLogin()">Sign In</button>
+      <button class="btn-secondary" style="width:100%;justify-content:center;margin-top:10px;" onclick="importAccountProfile()">
+        <i data-lucide="key-round" style="width:15px;height:15px;"></i>
+        Import Account Key (for new device)
+      </button>
     </div>
     <div id="register-form" style="display:none;">
       <div class="form-group">
@@ -905,7 +928,7 @@
       <div class="logo-icon">
         <i data-lucide="book-open" style="width:18px;height:18px;color:white;"></i>
       </div>
-      <div class="logo-text">Edu<span>Vault</span> Pro</div>
+      <div class="logo-text">Prajna<span>AI</span></div>
     </div>
     <nav class="sidebar-nav">
       <div class="nav-section-label">Main</div>
@@ -930,12 +953,12 @@
       <div class="nav-section-label">Tools</div>
       <button class="nav-item" onclick="exportLibrary()">
         <i data-lucide="download" style="width:16px;height:16px;"></i>
-        Export JSON
+        Export Library
       </button>
       <button class="nav-item" onclick="triggerImport()">
         <i data-lucide="upload" style="width:16px;height:16px;"></i>
-        Import JSON
-        <input type="file" id="import-file" accept=".json" style="display:none" onchange="importLibrary(event)" />
+        Import File
+        <input type="file" id="import-file" accept=".pdf,.docx,.txt,.xls,.xlsx" style="display:none" onchange="importLibrary(event)" />
       </button>
       <button class="nav-item" onclick="doLogout()" style="margin-top:auto; color:#ef4444;">
         <i data-lucide="log-out" style="width:16px;height:16px;"></i>
@@ -1097,13 +1120,13 @@
             <i data-lucide="upload-cloud" style="width:26px;height:26px;"></i>
           </div>
           <h3>Drop your file here or click to browse</h3>
-          <p>Supports PDF, DOC, DOCX, TXT and more</p>
+          <p>Supports PDF, DOCX, TXT, XLS and XLSX</p>
           <div class="file-types">
             <span class="file-type-chip badge-pdf">.pdf</span>
-            <span class="file-type-chip badge-doc">.doc</span>
             <span class="file-type-chip badge-doc">.docx</span>
+            <span class="file-type-chip badge-doc">.xls</span>
+            <span class="file-type-chip badge-doc">.xlsx</span>
             <span class="file-type-chip badge-txt">.txt</span>
-            <span class="file-type-chip badge-other">other</span>
           </div>
           <input type="file" id="file-input" style="display:none;" onchange="handleFileSelect(event)" />
         </div>
@@ -1142,7 +1165,7 @@
     <div class="page" id="page-collab">
       <div class="page-header">
         <h1 class="page-title">Collab Room</h1>
-        <p class="page-sub">Share your library with peers via a 6-digit room code.</p>
+        <p class="page-sub">Share your library, connect with peers, and discuss resources.</p>
       </div>
       <div class="collab-grid">
         <div class="collab-panel">
@@ -1171,6 +1194,30 @@
           <div class="collab-result" id="collab-result">
             <h4>📚 Imported Library</h4>
             <div id="collab-result-content"></div>
+          </div>
+        </div>
+      </div>
+      <div class="collab-grid">
+        <div class="collab-panel">
+          <h3>🤝 Friend Requests</h3>
+          <p>Send a request by username so learners can collaborate and chat around shared resources.</p>
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <div class="join-input-row">
+              <input class="form-input" id="friend-user-input" type="text" placeholder="friend_username" />
+              <button class="join-btn" onclick="sendFriendRequest()">Send</button>
+            </div>
+          </div>
+          <div id="friend-requests-box"></div>
+        </div>
+        <div class="collab-panel">
+          <h3>💬 Collab Chat</h3>
+          <p>Chat with your accepted friends and discuss topics or files from the vault.</p>
+          <div id="friend-list-box" style="max-height:150px;overflow:auto;margin-bottom:10px;"></div>
+          <div id="chat-thread" style="min-height:140px;max-height:220px;overflow:auto;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:10px;margin-bottom:10px;"></div>
+          <div class="join-input-row">
+            <input class="form-input" id="chat-message-input" type="text" placeholder="Type message..." />
+            <button class="join-btn" onclick="sendChatMessage()">Send</button>
           </div>
         </div>
       </div>
@@ -1221,6 +1268,21 @@
 
 <!-- TOAST CONTAINER -->
 <div id="toast-container"></div>
+<div id="ai-chat-widget" style="position:fixed;right:16px;bottom:16px;z-index:1999;width:min(360px,calc(100vw - 24px));">
+  <div style="background:var(--card);border:1px solid var(--border);border-radius:14px;overflow:hidden;">
+    <button onclick="toggleAiChat()" style="width:100%;display:flex;justify-content:space-between;align-items:center;padding:10px 12px;background:var(--card2);border:none;color:var(--text);cursor:pointer;">
+      <span style="font-weight:600;">🤖 PrajnaAI Tutor</span>
+      <i data-lucide="chevron-up" id="ai-toggle-icon" style="width:15px;height:15px;"></i>
+    </button>
+    <div id="ai-chat-body" style="padding:10px;">
+      <div id="ai-chat-log" style="height:160px;overflow:auto;background:#101010;border:1px solid var(--border);border-radius:10px;padding:8px;font-size:12px;margin-bottom:8px;"></div>
+      <div class="join-input-row">
+        <input class="form-input" id="ai-chat-input" type="text" placeholder="Ask a study question..." />
+        <button class="join-btn" onclick="sendAiMessage()">Ask</button>
+      </div>
+    </div>
+  </div>
+</div>
 
 <script>
 // ─── GLOBAL STATE ────────────────────────────────────────────────────────────
@@ -1229,6 +1291,8 @@ let currentFile = null;
 let cmdFocusIndex = -1;
 let lastRoomCode = '';
 let roomCodeMap = {}; // stored in localStorage globally
+let activeChatFriend = '';
+let aiChatOpen = true;
 
 // ─── AUTH ────────────────────────────────────────────────────────────────────
 function getUsers() { return JSON.parse(localStorage.getItem('ev_users') || '{}'); }
@@ -1246,6 +1310,12 @@ function saveUserData(username, data) {
 
 function getRoomCodes() { return JSON.parse(localStorage.getItem('ev_rooms') || '{}'); }
 function saveRoomCodes(r) { localStorage.setItem('ev_rooms', JSON.stringify(r)); }
+function getFriendRequests() { return JSON.parse(localStorage.getItem('ev_friend_requests') || '{}'); }
+function saveFriendRequests(v) { localStorage.setItem('ev_friend_requests', JSON.stringify(v)); }
+function getFriendships() { return JSON.parse(localStorage.getItem('ev_friendships') || '{}'); }
+function saveFriendships(v) { localStorage.setItem('ev_friendships', JSON.stringify(v)); }
+function getChats() { return JSON.parse(localStorage.getItem('ev_chats') || '{}'); }
+function saveChats(v) { localStorage.setItem('ev_chats', JSON.stringify(v)); }
 
 function switchTab(tab) {
   document.querySelectorAll('.auth-tab').forEach((t, i) => {
@@ -1284,6 +1354,7 @@ function doRegister() {
   if (users[user]) return showAuthError('Username already taken. Try another.');
   users[user] = { name, password: btoa(pass) };
   saveUsers(users);
+  exportAccountProfile(user, users[user]);
   saveSession(user);
   initApp(user, name);
 }
@@ -1315,6 +1386,7 @@ function initApp(username, displayName) {
   // Load data
   refreshAll();
   populateSubjectSuggestions();
+  refreshFriendUI();
   initPomodoro();
   setupKeyboard();
 }
@@ -1341,6 +1413,7 @@ function getFileType(filename) {
   if (ext === 'pdf') return 'pdf';
   if (['doc','docx'].includes(ext)) return 'doc';
   if (ext === 'txt') return 'txt';
+  if (['xls','xlsx'].includes(ext)) return 'excel';
   return 'other';
 }
 
@@ -1348,6 +1421,7 @@ function typeIcon(type) {
   if (type === 'pdf') return 'file-text';
   if (type === 'doc') return 'file';
   if (type === 'txt') return 'file-code';
+  if (type === 'excel') return 'sheet';
   return 'file-question';
 }
 
@@ -1355,6 +1429,7 @@ function typeBadgeClass(type) {
   if (type === 'pdf') return 'badge-pdf';
   if (type === 'doc') return 'badge-doc';
   if (type === 'txt') return 'badge-txt';
+  if (type === 'excel') return 'badge-doc';
   return 'badge-other';
 }
 
@@ -1362,6 +1437,7 @@ function typeLabel(type) {
   if (type === 'pdf') return 'PDF';
   if (type === 'doc') return 'DOC';
   if (type === 'txt') return 'TXT';
+  if (type === 'excel') return 'Excel';
   return 'FILE';
 }
 
@@ -1378,6 +1454,7 @@ function refreshAll() {
   renderRecent(res);
   renderSubjectsOverview(res);
   document.getElementById('vault-count').textContent = res.length;
+  refreshFriendUI();
   lucide.createIcons();
 }
 
@@ -1539,12 +1616,47 @@ dz.addEventListener('drop', e => {
   if (file) { currentFile = file; handleFileSelect({ target: { files: [file] } }); }
 });
 
-function doUpload() {
+async function parseFileContent(file) {
+  if (!file) return '';
+  const type = getFileType(file.name);
+  if (type === 'txt') return await file.text();
+  if (type === 'doc') {
+    const buffer = await file.arrayBuffer();
+    const result = await mammoth.extractRawText({ arrayBuffer: buffer });
+    return result.value || '';
+  }
+  if (type === 'excel') {
+    const buffer = await file.arrayBuffer();
+    const wb = XLSX.read(buffer, { type: 'array' });
+    const sheet = wb.Sheets[wb.SheetNames[0]];
+    return XLSX.utils.sheet_to_csv(sheet);
+  }
+  if (type === 'pdf' && window.pdfjsLib) {
+    const pdf = await window.pdfjsLib.getDocument({ data: await file.arrayBuffer() }).promise;
+    let all = '';
+    for (let i = 1; i <= Math.min(pdf.numPages, 5); i++) {
+      const page = await pdf.getPage(i);
+      const tc = await page.getTextContent();
+      all += tc.items.map(it => it.str).join(' ') + '\n\n';
+    }
+    return all.trim();
+  }
+  return '';
+}
+
+async function doUpload() {
   const title = document.getElementById('upload-title').value.trim();
   const subject = document.getElementById('upload-subject').value.trim();
-  const content = document.getElementById('upload-content').value.trim();
+  let content = document.getElementById('upload-content').value.trim();
   if (!title) return showToast('Please enter a title.', 'error');
   if (!subject) return showToast('Please enter a subject.', 'error');
+  if (!content && currentFile) {
+    try {
+      content = (await parseFileContent(currentFile)).trim();
+    } catch {
+      showToast('File uploaded, but text preview could not be extracted.', 'info');
+    }
+  }
 
   const resource = {
     id: 'res_' + Date.now() + '_' + Math.random().toString(36).substr(2,5),
@@ -1603,7 +1715,12 @@ function openReading(id, readOnly, customRes = null) {
   const body = document.getElementById('reading-body');
   let html = '';
   if (r.content) {
-    html += `<p style="white-space:pre-wrap;">${escHtml(r.content)}</p>`;
+    if (r.fileType === 'excel' && r.content.includes(',')) {
+      const rows = r.content.split('\n').slice(0, 20).map(line => line.split(','));
+      html += `<div style="overflow:auto;"><table style="width:100%;border-collapse:collapse;font-size:13px;">${rows.map((row, i) => `<tr>${row.map(col => `<${i===0?'th':'td'} style="border:1px solid var(--border);padding:6px;text-align:left;">${escHtml(col.replace(/^"|"$/g,''))}</${i===0?'th':'td'}>`).join('')}</tr>`).join('')}</table></div>`;
+    } else {
+      html += `<p style="white-space:pre-wrap;">${escHtml(r.content)}</p>`;
+    }
   }
   if (r.fileName) {
     html += `<div class="reading-file-info" style="margin-top:${r.content ? '20px' : '0'};">
@@ -1682,15 +1799,10 @@ window.openReading = function(id, readOnly, customRes) {
 // ─── EXPORT / IMPORT ─────────────────────────────────────────────────────────
 function exportLibrary() {
   const res = getResources();
-  const data = JSON.stringify({ version: 1, user: currentUser.displayName, exported: new Date().toISOString(), resources: res }, null, 2);
-  const blob = new Blob([data], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `eduvault-backup-${currentUser.username}-${Date.now()}.json`;
-  a.click();
-  URL.revokeObjectURL(url);
-  showToast('Library exported successfully!', 'success');
+  const format = (prompt('Export format? Choose: txt, csv, xlsx', 'txt') || '').toLowerCase().trim();
+  if (!['txt','csv','xlsx'].includes(format)) return showToast('Export cancelled or invalid format.', 'error');
+  exportByFormat(res, format, `prajnaai-library-${currentUser.username}-${Date.now()}`);
+  showToast(`Library exported as ${format.toUpperCase()}.`, 'success');
 }
 
 function triggerImport() { document.getElementById('import-file').click(); }
@@ -1698,23 +1810,53 @@ function triggerImport() { document.getElementById('import-file').click(); }
 function importLibrary(e) {
   const file = e.target.files[0];
   if (!file) return;
-  const reader = new FileReader();
-  reader.onload = (ev) => {
-    try {
-      const data = JSON.parse(ev.target.result);
-      if (!data.resources || !Array.isArray(data.resources)) throw new Error('Invalid format');
-      const existing = getResources();
-      const existingIds = new Set(existing.map(r => r.id));
-      const newRes = data.resources.filter(r => !existingIds.has(r.id));
-      saveResources([...existing, ...newRes]);
-      refreshAll();
-      showToast(`Imported ${newRes.length} new resources!`, 'success');
-    } catch {
-      showToast('Invalid backup file.', 'error');
-    }
-  };
-  reader.readAsText(file);
+  const title = file.name.replace(/\.[^.]+$/, '');
+  const subject = 'Imported';
+  parseFileContent(file).then((content) => {
+    const resource = {
+      id: 'res_' + Date.now() + '_' + Math.random().toString(36).slice(2,7),
+      title,
+      subject,
+      content: content || 'Imported file. Preview extraction not available.',
+      fileName: file.name,
+      fileType: getFileType(file.name),
+      fileSize: file.size,
+      createdAt: Date.now()
+    };
+    const existing = getResources();
+    saveResources([...existing, resource]);
+    refreshAll();
+    showToast(`Imported "${file.name}" successfully.`, 'success');
+  }).catch(() => showToast('Unsupported or invalid file.', 'error'));
   e.target.value = '';
+}
+
+function exportByFormat(resources, format, baseName) {
+  if (format === 'txt') {
+    const body = resources.map((r, i) => `${i+1}. ${r.title}\nSubject: ${r.subject}\nType: ${r.fileType}\nDate: ${formatDate(r.createdAt)}\n${r.content || ''}\n`).join('\n---\n');
+    downloadBlob(new Blob([body], { type: 'text/plain' }), `${baseName}.txt`);
+    return;
+  }
+  if (format === 'csv') {
+    const rows = [['Title','Subject','Type','Date','Content'], ...resources.map(r => [r.title, r.subject, r.fileType, formatDate(r.createdAt), (r.content || '').replace(/\n/g,' ')])];
+    const csv = rows.map(row => row.map(cell => `"${String(cell).replace(/"/g,'""')}"`).join(',')).join('\n');
+    downloadBlob(new Blob([csv], { type: 'text/csv' }), `${baseName}.csv`);
+    return;
+  }
+  const data = resources.map(r => ({ Title: r.title, Subject: r.subject, Type: r.fileType, Date: formatDate(r.createdAt), Content: r.content || '' }));
+  const ws = XLSX.utils.json_to_sheet(data);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Library');
+  XLSX.writeFile(wb, `${baseName}.xlsx`);
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
 }
 
 // ─── NAVIGATION ──────────────────────────────────────────────────────────────
@@ -1917,9 +2059,139 @@ function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
+function exportAccountProfile(username, profile) {
+  const data = JSON.stringify({ username, ...profile });
+  downloadBlob(new Blob([data], { type: 'application/json' }), `prajnaai-account-${username}.json`);
+}
+
+function importAccountProfile() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    try {
+      const payload = JSON.parse(await file.text());
+      if (!payload.username || !payload.password || !payload.name) throw new Error();
+      const users = getUsers();
+      users[payload.username] = { name: payload.name, password: payload.password };
+      saveUsers(users);
+      showToast('Account key imported. You can login now.', 'success');
+    } catch {
+      showToast('Invalid account key file.', 'error');
+    }
+  };
+  input.click();
+}
+
+function sendFriendRequest() {
+  const to = document.getElementById('friend-user-input').value.trim().toLowerCase();
+  if (!to || to === currentUser.username) return showToast('Enter a valid friend username.', 'error');
+  const users = getUsers();
+  if (!users[to]) return showToast('User not found.', 'error');
+  const requests = getFriendRequests();
+  if (!requests[to]) requests[to] = [];
+  if (!requests[to].includes(currentUser.username)) requests[to].push(currentUser.username);
+  saveFriendRequests(requests);
+  document.getElementById('friend-user-input').value = '';
+  showToast('Friend request sent.', 'success');
+}
+
+function refreshFriendUI() {
+  const requests = getFriendRequests()[currentUser.username] || [];
+  document.getElementById('friend-requests-box').innerHTML = requests.length ? requests.map(r => `
+    <div style="display:flex;justify-content:space-between;align-items:center;background:var(--card2);border:1px solid var(--border);border-radius:10px;padding:8px;margin-bottom:8px;">
+      <span>${escHtml(r)}</span>
+      <span style="display:flex;gap:6px;">
+        <button class="pomo-btn" onclick="respondRequest('${r}', true)">Accept</button>
+        <button class="pomo-btn" onclick="respondRequest('${r}', false)">Decline</button>
+      </span>
+    </div>`).join('') : '<p style="font-size:12px;color:var(--muted);">No pending requests.</p>';
+
+  const friendships = getFriendships();
+  const mine = friendships[currentUser.username] || [];
+  if (!activeChatFriend && mine.length) activeChatFriend = mine[0];
+  document.getElementById('friend-list-box').innerHTML = mine.length ? mine.map(f => `
+    <button class="pomo-btn ${activeChatFriend===f?'running':''}" style="margin:0 6px 6px 0;" onclick="openFriendChat('${f}')">${escHtml(f)}</button>`).join('') : '<p style="font-size:12px;color:var(--muted);">No friends yet.</p>';
+  renderChatThread();
+}
+
+function respondRequest(fromUser, accept) {
+  const all = getFriendRequests();
+  all[currentUser.username] = (all[currentUser.username] || []).filter(u => u !== fromUser);
+  saveFriendRequests(all);
+  if (accept) {
+    const friends = getFriendships();
+    if (!friends[currentUser.username]) friends[currentUser.username] = [];
+    if (!friends[fromUser]) friends[fromUser] = [];
+    if (!friends[currentUser.username].includes(fromUser)) friends[currentUser.username].push(fromUser);
+    if (!friends[fromUser].includes(currentUser.username)) friends[fromUser].push(currentUser.username);
+    saveFriendships(friends);
+  }
+  refreshFriendUI();
+}
+
+function openFriendChat(friend) {
+  activeChatFriend = friend;
+  refreshFriendUI();
+}
+
+function chatKey(a, b) {
+  return [a, b].sort().join('__');
+}
+
+function sendChatMessage() {
+  if (!activeChatFriend) return showToast('Select a friend first.', 'error');
+  const input = document.getElementById('chat-message-input');
+  const text = input.value.trim();
+  if (!text) return;
+  const chats = getChats();
+  const key = chatKey(currentUser.username, activeChatFriend);
+  if (!chats[key]) chats[key] = [];
+  chats[key].push({ from: currentUser.username, text, at: Date.now() });
+  saveChats(chats);
+  input.value = '';
+  renderChatThread();
+}
+
+function renderChatThread() {
+  const box = document.getElementById('chat-thread');
+  if (!box) return;
+  if (!activeChatFriend) {
+    box.innerHTML = '<p style="font-size:12px;color:var(--muted);">Choose a friend to start chatting.</p>';
+    return;
+  }
+  const chats = getChats()[chatKey(currentUser.username, activeChatFriend)] || [];
+  box.innerHTML = chats.length ? chats.map(c => `<div style="margin-bottom:8px;text-align:${c.from===currentUser.username?'right':'left'};"><span style="display:inline-block;background:${c.from===currentUser.username?'var(--orange-dim)':'#191919'};padding:6px 8px;border-radius:8px;max-width:88%;">${escHtml(c.text)}</span></div>`).join('') : '<p style="font-size:12px;color:var(--muted);">No messages yet.</p>';
+  box.scrollTop = box.scrollHeight;
+}
+
+function toggleAiChat() {
+  aiChatOpen = !aiChatOpen;
+  document.getElementById('ai-chat-body').style.display = aiChatOpen ? '' : 'none';
+  document.getElementById('ai-toggle-icon').setAttribute('data-lucide', aiChatOpen ? 'chevron-up' : 'chevron-down');
+  lucide.createIcons();
+}
+
+function sendAiMessage() {
+  const input = document.getElementById('ai-chat-input');
+  const q = input.value.trim();
+  if (!q) return;
+  const log = document.getElementById('ai-chat-log');
+  log.innerHTML += `<div style="margin-bottom:6px;"><strong>You:</strong> ${escHtml(q)}</div>`;
+  const hint = q.toLowerCase().includes('summary') ? 'Try the Feynman method: explain it in simple words, then refine gaps.' : 'Tip: convert this topic into 5 flashcards + 3 practice questions.';
+  log.innerHTML += `<div style="margin-bottom:10px;color:#f5b27e;"><strong>PrajnaAI:</strong> ${escHtml(hint)}</div>`;
+  input.value = '';
+  log.scrollTop = log.scrollHeight;
+}
+
 // ─── BOOT ────────────────────────────────────────────────────────────────────
 document.addEventListener('DOMContentLoaded', () => {
   lucide.createIcons();
+  if (window.pdfjsLib) {
+    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+  }
   checkSession();
 
   // Keyboard enter on auth
